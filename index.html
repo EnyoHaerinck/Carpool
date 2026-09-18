@@ -19,6 +19,8 @@ header{display:flex;justify-content:space-between;align-items:center;margin-bott
 .badge{font-size:10px;font-weight:800;letter-spacing:.5px;padding:6px 10px;border-radius:99px;background:var(--card2);color:var(--muted);border:0;cursor:pointer}
 .syncdot{width:8px;height:8px;border-radius:50%;background:#4d5560;display:inline-block;margin-right:6px;vertical-align:middle}
 .syncdot.live{background:var(--accent)}
+.driverspent{font-size:10px;color:var(--muted);font-weight:700;margin-top:3px}
+.driverspent b{color:var(--accent)}
 h1{font-size:31px;line-height:1.05;letter-spacing:-1.5px;margin:0 0 7px}.sub{color:var(--muted);font-size:13px}
 .hero{background:linear-gradient(145deg,#171d23,#101419);border:1px solid var(--line);border-radius:24px;padding:20px;margin:20px 0}
 .route{display:flex;align-items:center;gap:10px;font-weight:700}.arrow{color:var(--accent);font-size:20px}.route small{display:block;color:var(--muted);font-size:11px;font-weight:500;margin-top:4px}
@@ -53,7 +55,10 @@ h1{font-size:31px;line-height:1.05;letter-spacing:-1.5px;margin:0 0 7px}.sub{col
 </head>
 <body>
 <div class="app">
-<header><div class="logo">V40<span>•</span>CARPOOL</div>
+<header><div>
+<div class="logo">V40<span>•</span>CARPOOL</div>
+<div class="driverspent" id="driverSpent"></div>
+</div>
 <div style="display:flex;align-items:center;gap:8px">
 <button class="badge" id="roleBadge" onclick="onBadgeClick()"><span class="syncdot" id="syncDot"></span>LADEN</button>
 <button class="iconbtn" id="settingsBtn" onclick="openSettings()" style="display:none">⚙</button>
@@ -197,6 +202,10 @@ window.logout=function(){
  isAdmin=false; localStorage.removeItem(ADMIN_KEY); closeSettings(); applyRoleUI(); render();
 }
 
+function updateDriverSpent(){
+ const total=data.trips.reduce((sum,t)=>sum+(t.driverCost!=null?t.driverCost:t.driverFuel*data.settings.price),0);
+ document.getElementById('driverSpent').innerHTML=cloudReady?`Enyo: <b>€${fmt(total)}</b>`:'';
+}
 function render(){
  document.getElementById('today').textContent=new Date().toLocaleDateString('nl-BE',{weekday:'long',day:'numeric',month:'long'});
  if(cloudReady){
@@ -218,7 +227,7 @@ function render(){
    <button class="choice ${s==='beide'?'active':''}" ${isAdmin?'':'disabled'} onclick="choose(${p.id},'beide')">BEIDE</button>
    </div></div>`;
  });
- updateSummary(); renderHistory(); renderStats(); renderAccounts();
+ updateSummary(); renderHistory(); renderStats(); renderAccounts(); updateDriverSpent();
 }
 function label(s){return s==='heen'?'Mee heen':s==='terug'?'Mee terug':'Heen + terug'}
 window.choose=function(id,s){if(!isAdmin)return;selections[id]=selections[id]===s?'':s;render()}
@@ -242,7 +251,12 @@ function updateSummary(){
 window.saveTrip=async function(){
  if(!isAdmin)return;
  const c=calculate(); if(!c.rows.length){alert('Kies eerst minstens één persoon.');return}
- const now=new Date(); data.trips.unshift({date:now.toISOString(),rows:c.rows,heen:c.heen,terug:c.terug,driverFuel:2*c.legFuel});
+ const now=new Date();
+ // driverCost = wat jij zelf aan de pomp betaalt voor deze rit (heen+terug), tegen de
+ // prijs van op het moment van opslaan — net als bij de passagiers, zodat een latere
+ // prijswijziging oude ritten niet met terugwerkende kracht verandert.
+ const driverCost=2*c.legFuel*data.settings.price;
+ data.trips.unshift({date:now.toISOString(),rows:c.rows,heen:c.heen,terug:c.terug,driverFuel:2*c.legFuel,driverCost});
  c.rows.forEach(r=>{data.payments[r.id]=(data.payments[r.id]||0)+r.cost});
  await persist();selections={};render();alert('Rit opgeslagen.');
 }
