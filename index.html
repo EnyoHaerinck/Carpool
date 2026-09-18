@@ -202,8 +202,19 @@ window.logout=function(){
  isAdmin=false; localStorage.removeItem(ADMIN_KEY); closeSettings(); applyRoleUI(); render();
 }
 
+// Voor ritten opgeslagen vóór deze fix stond driverFuel nog als het volle onverdeelde
+// bedrag (2×legFuel) i.p.v. het gedeelde aandeel — hier herberekenen we die alsnog correct.
+function tripDriverCost(t){
+ if(t.legFuel!=null){
+   const liters=t.legFuel/((t.heen||0)+1)+t.legFuel/((t.terug||0)+1);
+   return liters*data.settings.price;
+ }
+ const legFuel=(t.driverFuel||0)/2;
+ const liters=legFuel/((t.heen||0)+1)+legFuel/((t.terug||0)+1);
+ return liters*data.settings.price;
+}
 function updateDriverSpent(){
- const total=data.trips.reduce((sum,t)=>sum+(t.driverCost!=null?t.driverCost:t.driverFuel*data.settings.price),0);
+ const total=data.trips.reduce((sum,t)=>sum+tripDriverCost(t),0);
  document.getElementById('driverSpent').innerHTML=cloudReady?`Enyo: <b>€${fmt(total)}</b>`:'';
 }
 function render(){
@@ -235,6 +246,9 @@ function calculate(){
  const heen=data.people.filter(p=>selections[p.id]==='heen'||selections[p.id]==='beide').length;
  const terug=data.people.filter(p=>selections[p.id]==='terug'||selections[p.id]==='beide').length;
  const legFuel=fuelForKm(data.settings.distance);
+ // Jij (de bestuurder) rijdt sowieso beide richtingen, en betaalt hetzelfde gedeelde
+ // aandeel per traject als elke passagier die "BEIDE" koos — geen dubbel/onverdeeld bedrag.
+ const driverLiters=legFuel/(heen+1)+legFuel/(terug+1);
  let rows=[];
  data.people.forEach(p=>{
    const s=selections[p.id]; let liters=0,km=0;
@@ -242,7 +256,7 @@ function calculate(){
    if(s==='terug'||s==='beide'){liters+=legFuel/(terug+1);km+=data.settings.distance}
    if(s) rows.push({id:p.id,name:p.name,selection:s,km,liters,cost:liters*data.settings.price});
  });
- return {rows,heen,terug,legFuel};
+ return {rows,heen,terug,legFuel,driverLiters};
 }
 function updateSummary(){
  const c=calculate(); const total=c.rows.reduce((a,r)=>a+r.liters,0);
@@ -252,11 +266,11 @@ window.saveTrip=async function(){
  if(!isAdmin)return;
  const c=calculate(); if(!c.rows.length){alert('Kies eerst minstens één persoon.');return}
  const now=new Date();
- // driverCost = wat jij zelf aan de pomp betaalt voor deze rit (heen+terug), tegen de
- // prijs van op het moment van opslaan — net als bij de passagiers, zodat een latere
- // prijswijziging oude ritten niet met terugwerkende kracht verandert.
- const driverCost=2*c.legFuel*data.settings.price;
- data.trips.unshift({date:now.toISOString(),rows:c.rows,heen:c.heen,terug:c.terug,driverFuel:2*c.legFuel,driverCost});
+ // driverCost = jouw eigen gedeelde aandeel (zelfde verdeling als de passagiers), niet
+ // de volle onverdeelde brandstofkost. legFuel wordt mee opgeslagen zodat dit ook later
+ // nog correct herberekend kan worden.
+ const driverCost=c.driverLiters*data.settings.price;
+ data.trips.unshift({date:now.toISOString(),rows:c.rows,heen:c.heen,terug:c.terug,legFuel:c.legFuel,driverFuel:c.driverLiters,driverCost});
  c.rows.forEach(r=>{data.payments[r.id]=(data.payments[r.id]||0)+r.cost});
  await persist();selections={};render();alert('Rit opgeslagen.');
 }
