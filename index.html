@@ -31,13 +31,21 @@ h1{font-size:31px;line-height:1.05;letter-spacing:-1.5px;margin:0 0 7px}.sub{col
 .summary{background:var(--accent);color:#0b0d0e;border-radius:22px;padding:18px;margin-top:18px}.summary .big{font-size:29px;font-weight:800;letter-spacing:-1px}.summary p{margin:4px 0 0;font-size:12px;font-weight:600;opacity:.75}
 .save{width:100%;border:0;background:white;color:#090b0e;border-radius:17px;padding:16px;font-size:14px;font-weight:800;margin-top:12px}
 .save:disabled{opacity:.5}
+.detailbtn{width:100%;border:1px solid var(--line);background:var(--card2);color:var(--text);border-radius:14px;padding:13px;font-size:12px;font-weight:700;margin-top:10px}
 .empty{padding:24px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:18px;font-size:13px}
 .readonly-note{padding:14px 16px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:16px;font-size:12px;line-height:1.5;margin-top:12px}
 .bottom{position:fixed;bottom:0;left:0;right:0;background:rgba(8,10,13,.93);backdrop-filter:blur(15px);border-top:1px solid var(--line);z-index:5}.nav{max-width:520px;margin:auto;display:grid;grid-template-columns:repeat(4,1fr);padding:10px 10px calc(10px + env(safe-area-inset-bottom))}
 .nav button{border:0;background:none;color:#68717c;padding:9px;font-size:11px;font-weight:700}.nav button.active{color:var(--accent)}.nav i{display:block;font-style:normal;font-size:19px;margin-bottom:3px}
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:flex-end;z-index:10}.modal.open{display:flex}.sheet{width:100%;max-width:520px;margin:auto;background:#11151a;border:1px solid var(--line);border-radius:25px 25px 0 0;padding:22px 18px 30px}.sheet h2{margin:0 0 16px;font-size:20px}.input{width:100%;padding:14px;border:1px solid var(--line);background:#0b0e12;color:white;border-radius:13px;outline:none;font:inherit}.actions{display:flex;gap:8px;margin-top:12px}.actions button{flex:1;padding:13px;border-radius:13px;border:1px solid var(--line);background:var(--card2);color:white;font-weight:700}.actions .primary{background:var(--accent);color:#090b0e;border-color:var(--accent)}.actions .danger{background:var(--danger);color:#fff;border-color:var(--danger)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:flex-end;z-index:10}.modal.open{display:flex}.sheet{width:100%;max-width:520px;margin:auto;background:#11151a;border:1px solid var(--line);border-radius:25px 25px 0 0;padding:22px 18px 30px;max-height:82vh;overflow-y:auto}.sheet h2{margin:0 0 16px;font-size:20px}.input{width:100%;padding:14px;border:1px solid var(--line);background:#0b0e12;color:white;border-radius:13px;outline:none;font:inherit}.actions{display:flex;gap:8px;margin-top:12px}.actions button{flex:1;padding:13px;border-radius:13px;border:1px solid var(--line);background:var(--card2);color:white;font-weight:700}.actions .primary{background:var(--accent);color:#090b0e;border-color:var(--accent)}.actions .danger{background:var(--danger);color:#fff;border-color:var(--danger)}
 .page{display:none}.page.active{display:block}
 .history-item{background:var(--card);border:1px solid var(--line);padding:15px;border-radius:17px;margin-bottom:9px}.history-top{display:flex;justify-content:space-between}.history-item small{color:var(--muted);display:block;margin-top:5px}
+.detail-row{background:#0d1014;border:1px solid var(--line);border-radius:15px;padding:13px 14px;margin-bottom:8px}
+.detail-top{display:flex;justify-content:space-between;align-items:baseline}
+.detail-top b{font-size:14px}
+.detail-top .amt{font-size:16px;font-weight:800;color:var(--accent)}
+.detail-sub{font-size:11px;color:var(--muted);margin-top:4px}
+.detail-total{background:var(--card2);border-radius:15px;padding:14px;margin-top:4px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center}
+.detail-total b{font-size:18px}
 .setting{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:10px}.setting label{display:block;font-size:11px;color:var(--muted);margin-bottom:8px}.setting input{width:100%;background:#0b0e12;border:1px solid var(--line);color:white;padding:12px;border-radius:12px;font:inherit}
 .notice{font-size:11px;color:var(--muted);line-height:1.5;margin-top:10px}
 .errtext{color:var(--danger);font-size:12px;margin-top:8px;display:none}
@@ -117,6 +125,13 @@ h1{font-size:31px;line-height:1.05;letter-spacing:-1.5px;margin:0 0 7px}.sub{col
 <h2 id="confirmTitle">Weet je het zeker?</h2>
 <p id="confirmText" style="color:var(--muted);font-size:13px;line-height:1.5;margin:0 0 6px"></p>
 <div class="actions"><button onclick="closeConfirm()">Annuleren</button><button class="primary" id="confirmBtn">Bevestigen</button></div>
+</div></div>
+
+<div class="modal" id="detailModal"><div class="sheet">
+<h2 id="detailTitle">Ritten</h2>
+<div id="detailTotal"></div>
+<div id="detailList"></div>
+<div class="actions"><button onclick="closeDetail()">Sluiten</button></div>
 </div></div>
 
 <script type="module">
@@ -292,6 +307,38 @@ window.askMarkPaid=function(id){
 async function markPaid(id){
  data.payments[id]=0; await persist(); render();
 }
+// Toont een popup met alle dagen waarop deze persoon meereed: datum, HEEN/TERUG/BEIDE,
+// km en liter voor die dag, en het bedrag dat hij/zij die dag verschuldigd was.
+window.showAccountDetail=function(id){
+ const p=data.people.find(x=>x.id===id); if(!p)return;
+ document.getElementById('detailTitle').textContent=esc(p.name)+' · ritten';
+ let rows=[];
+ data.trips.forEach(t=>{
+   t.rows.filter(r=>r.id===id).forEach(r=>{
+     rows.push({date:t.date, selection:r.selection, km:r.km, liters:r.liters, cost:r.cost});
+   });
+ });
+ const totalEl=document.getElementById('detailTotal');
+ const listEl=document.getElementById('detailList');
+ if(!rows.length){
+   totalEl.innerHTML='';
+   listEl.innerHTML='<div class="empty">Nog geen ritten voor deze persoon.</div>';
+ }else{
+   const totalCost=rows.reduce((a,r)=>a+r.cost,0);
+   const totalKm=rows.reduce((a,r)=>a+r.km,0);
+   const totalL=rows.reduce((a,r)=>a+r.liters,0);
+   totalEl.innerHTML=`<div class="detail-total"><div><div class="pmeta">Totaal over ${rows.length} rit(ten)</div><b>€${fmt(totalCost)}</b></div><div style="text-align:right"><div class="pmeta">${fmt(totalKm,1)} km</div><div class="pmeta">${fmt(totalL)} L</div></div></div>`;
+   listEl.innerHTML=rows.map(r=>{
+     const d=new Date(r.date).toLocaleDateString('nl-BE',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+     return `<div class="detail-row">
+       <div class="detail-top"><b>${d}</b><span class="amt">€${fmt(r.cost)}</span></div>
+       <div class="detail-sub">${label(r.selection)} · ${fmt(r.km,1)} km · ${fmt(r.liters)} L</div>
+     </div>`;
+   }).join('');
+ }
+ document.getElementById('detailModal').classList.add('open');
+}
+window.closeDetail=function(){document.getElementById('detailModal').classList.remove('open')}
 function renderAccounts(){
  const el=document.getElementById('accountsList');
  if(!data.people.length){el.innerHTML='<div class="empty">Nog geen personen.</div>';return}
@@ -301,6 +348,7 @@ function renderAccounts(){
    return `<div class="person">
     <div class="phead"><div class="avatar">${p.name[0].toUpperCase()}</div><div><div class="pname">${esc(p.name)}</div><div class="pmeta">${count} ritten op rekening</div></div></div>
     <div class="summary" style="margin-top:13px"><div class="big">€${fmt(amount)}</div><p>${amount>0?'Openstaand bedrag':'Alles betaald'}</p></div>
+    <button class="detailbtn" onclick="showAccountDetail(${p.id})">📋 Bekijk alle ritten</button>
     ${amount>0&&isAdmin?`<button class="save" onclick="askMarkPaid(${p.id})">✓ BETAALD · REKENING WISSEN</button>`:''}
    </div>`;
  }).join('');
