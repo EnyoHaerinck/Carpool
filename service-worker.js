@@ -3,7 +3,7 @@
 // versie van de app te zien krijgt — alleen als er geen internet is, valt hij
 // terug op de laatst gecachte versie. Statische bestanden (iconen, manifest)
 // blijven cache-first, want die veranderen zelden.
-const CACHE = 'v40carpool-v5';
+const CACHE = 'v40carpool-v6';
 const ASSETS = ['./', './index.html', './manifest.json', './DE9C44F0-A923-4E46-9C12-6E9843AE79B3.png'];
 
 self.addEventListener('install', e => {
