@@ -38,7 +38,13 @@ h1{font-size:31px;line-height:1.05;letter-spacing:-1.5px;margin:0 0 7px}.sub{col
 .readonly-note{padding:14px 16px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:16px;font-size:12px;line-height:1.5;margin-top:12px}
 .bottom{position:fixed;bottom:0;left:0;right:0;background:rgba(8,10,13,.93);backdrop-filter:blur(15px);border-top:1px solid var(--line);z-index:5}.nav{max-width:520px;margin:auto;display:grid;grid-template-columns:repeat(4,1fr);padding:10px 10px calc(10px + env(safe-area-inset-bottom))}
 .nav button{border:0;background:none;color:#68717c;padding:9px;font-size:11px;font-weight:700}.nav button.active{color:var(--accent)}.nav i{display:block;font-style:normal;font-size:19px;margin-bottom:3px}
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;align-items:flex-end;z-index:10}.modal.open{display:flex}.sheet{width:100%;max-width:520px;margin:auto;background:#11151a;border:1px solid var(--line);border-radius:25px 25px 0 0;padding:22px 18px 30px;max-height:82vh;overflow-y:auto}.sheet h2{margin:0 0 16px;font-size:20px}.input{width:100%;padding:14px;border:1px solid var(--line);background:#0b0e12;color:white;border-radius:13px;outline:none;font:inherit}.actions{display:flex;gap:8px;margin-top:12px}.actions button{flex:1;padding:13px;border-radius:13px;border:1px solid var(--line);background:var(--card2);color:white;font-weight:700}.actions .primary{background:var(--accent);color:#090b0e;border-color:var(--accent)}.actions .danger{background:var(--danger);color:#fff;border-color:var(--danger)}
+
+/* GEFIXT: Modal gecentreerd & hogere z-index */
+body::-webkit-scrollbar {display: none;}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;align-items:center;justify-content:center;z-index:100;padding:16px}
+.modal.open{display:flex}
+.sheet{width:100%;max-width:480px;margin:auto;background:#11151a;border:1px solid var(--line);border-radius:25px;padding:22px 18px;max-height:85vh;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;-ms-overflow-style:none}.sheet::-webkit-scrollbar{width:0;height:0}.sheet h2{margin:0 0 16px;font-size:20px}.input{width:100%;padding:14px;border:1px solid var(--line);background:#0b0e12;color:white;border-radius:13px;outline:none;font:inherit}.actions{display:flex;gap:8px;margin-top:12px}.actions button{flex:1;padding:13px;border-radius:13px;border:1px solid var(--line);background:var(--card2);color:white;font-weight:700}.actions .primary{background:var(--accent);color:#090b0e;border-color:var(--accent)}.actions .danger{background:var(--danger);color:#fff;border-color:var(--danger)}
+
 .page{display:none}.page.active{display:block}
 .history-item{background:var(--card);border:1px solid var(--line);padding:15px;border-radius:17px;margin-bottom:9px}.history-top{display:flex;justify-content:space-between}.history-item small{color:var(--muted);display:block;margin-top:5px}
 .detail-row{background:#0d1014;border:1px solid var(--line);border-radius:15px;padding:13px 14px;margin-bottom:8px}
@@ -152,22 +158,35 @@ const firebaseConfig = {
   appId: "1:790550707199:web:cd23887b776adc4e81c5ca"
 };
 const fbApp = initializeApp(firebaseConfig);
-// Lokale (IndexedDB) cache aan: bij een herlaad toont de app meteen de laatst gekende
-// gegevens terwijl ze op de achtergrond met de server gesynchroniseerd worden, i.p.v.
-// telkens te moeten wachten op een nieuwe netwerk-round-trip.
+
 const fdb = initializeFirestore(fbApp, {
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
 });
 const stateRef = doc(fdb, "carpool", "state");
 
 const ADMIN_KEY='v40carpool_admin';
-const ADMIN_PASSWORD='Volvo1'; // pas dit hier aan om het wachtwoord te wijzigen
+const ADMIN_PASSWORD='Volvo1';
 let data={
  people:[], trips:[], payments:{}, settings:{car:'Volvo V40 Sport',consumption:6.5,distance:28.4,price:1.65}
 };
 let selections={};
 let isAdmin=localStorage.getItem(ADMIN_KEY)==='true';
 let cloudReady=false;
+let savedScrollY=0;
+function lockScroll(){
+ savedScrollY=window.scrollY;
+ document.body.style.position='fixed';
+ document.body.style.top=`-${savedScrollY}px`;
+ document.body.style.left='0';
+ document.body.style.right='0';
+}
+function unlockScroll(){
+ document.body.style.position='';
+ document.body.style.top='';
+ document.body.style.left='';
+ document.body.style.right='';
+ window.scrollTo(0,savedScrollY);
+}
 
 function fmt(n,d=2){return Number(n).toLocaleString('nl-BE',{minimumFractionDigits:d,maximumFractionDigits:d})}
 function fuelForKm(km){return km*data.settings.consumption/100}
@@ -179,8 +198,6 @@ async function persist(){
 }
 
 function applyRoleUI(){
- // Let op: id="syncDot" moet hier telkens opnieuw meegegeven worden, anders bestaat
- // het element na de eerste render niet meer en crasht de volgende aanroep hierboven.
  document.getElementById('roleBadge').innerHTML=`<span class="syncdot ${cloudReady?'live':''}" id="syncDot"></span>${isAdmin?'ADMIN':'BEKIJKER'}`;
  document.getElementById('settingsBtn').style.display=isAdmin?'':'none';
  document.getElementById('addPersonBtn').style.display=isAdmin?'':'none';
@@ -188,8 +205,8 @@ function applyRoleUI(){
  document.getElementById('readonlyNote').style.display=isAdmin?'none':(cloudReady?'block':'none');
 }
 window.onBadgeClick=function(){ if(!cloudReady)return; if(isAdmin){ openSettings(); } else { openLogin(); } }
-window.openLogin=function(){document.getElementById('passInput').value='';document.getElementById('loginErr').style.display='none';document.getElementById('loginModal').classList.add('open');setTimeout(()=>document.getElementById('passInput').focus(),50)}
-window.closeLogin=function(){document.getElementById('loginModal').classList.remove('open')}
+window.openLogin=function(){document.getElementById('passInput').value='';document.getElementById('loginErr').style.display='none';document.getElementById('loginModal').classList.add('open');lockScroll();setTimeout(()=>document.getElementById('passInput').focus(),50)}
+window.closeLogin=function(){document.getElementById('loginModal').classList.remove('open');unlockScroll()}
 window.tryLogin=function(){
  const v=document.getElementById('passInput').value;
  if(v===ADMIN_PASSWORD){
@@ -202,8 +219,6 @@ window.logout=function(){
  isAdmin=false; localStorage.removeItem(ADMIN_KEY); closeSettings(); applyRoleUI(); render();
 }
 
-// Voor ritten opgeslagen vóór deze fix stond driverFuel nog als het volle onverdeelde
-// bedrag (2×legFuel) i.p.v. het gedeelde aandeel — hier herberekenen we die alsnog correct.
 function tripDriverCost(t){
  if(t.legFuel!=null){
    const liters=t.legFuel/((t.heen||0)+1)+t.legFuel/((t.terug||0)+1);
@@ -246,8 +261,6 @@ function calculate(){
  const heen=data.people.filter(p=>selections[p.id]==='heen'||selections[p.id]==='beide').length;
  const terug=data.people.filter(p=>selections[p.id]==='terug'||selections[p.id]==='beide').length;
  const legFuel=fuelForKm(data.settings.distance);
- // Jij (de bestuurder) rijdt sowieso beide richtingen, en betaalt hetzelfde gedeelde
- // aandeel per traject als elke passagier die "BEIDE" koos — geen dubbel/onverdeeld bedrag.
  const driverLiters=legFuel/(heen+1)+legFuel/(terug+1);
  let rows=[];
  data.people.forEach(p=>{
@@ -266,9 +279,6 @@ window.saveTrip=async function(){
  if(!isAdmin)return;
  const c=calculate(); if(!c.rows.length){alert('Kies eerst minstens één persoon.');return}
  const now=new Date();
- // driverCost = jouw eigen gedeelde aandeel (zelfde verdeling als de passagiers), niet
- // de volle onverdeelde brandstofkost. legFuel wordt mee opgeslagen zodat dit ook later
- // nog correct herberekend kan worden.
  const driverCost=c.driverLiters*data.settings.price;
  data.trips.unshift({date:now.toISOString(),rows:c.rows,heen:c.heen,terug:c.terug,legFuel:c.legFuel,driverFuel:c.driverLiters,driverCost});
  c.rows.forEach(r=>{data.payments[r.id]=(data.payments[r.id]||0)+r.cost});
@@ -305,8 +315,9 @@ function openConfirm(title,text,onYes){
  const freshBtn=btn.cloneNode(true); btn.parentNode.replaceChild(freshBtn,btn);
  freshBtn.onclick=()=>{closeConfirm();onYes()};
  document.getElementById('confirmModal').classList.add('open');
+ lockScroll();
 }
-window.closeConfirm=function(){document.getElementById('confirmModal').classList.remove('open')}
+window.closeConfirm=function(){document.getElementById('confirmModal').classList.remove('open');unlockScroll()}
 window.askDeleteTrip=function(date){
  if(!isAdmin)return;
  openConfirm('Rit verwijderen?','Deze volledige dag en de bijhorende bedragen op de rekeningen van alle personen worden verwijderd. Dit kan niet ongedaan gemaakt worden.',()=>deleteTrip(date));
@@ -335,8 +346,6 @@ window.askMarkPaid=function(id){
 async function markPaid(id){
  data.payments[id]=0; await persist(); render();
 }
-// Toont een popup met alle dagen waarop deze persoon meereed: datum, HEEN/TERUG/BEIDE,
-// km en liter voor die dag, en het bedrag dat hij/zij die dag verschuldigd was.
 window.showAccountDetail=function(id){
  const p=data.people.find(x=>x.id===id); if(!p)return;
  document.getElementById('detailTitle').textContent=esc(p.name)+' · ritten';
@@ -365,8 +374,9 @@ window.showAccountDetail=function(id){
    }).join('');
  }
  document.getElementById('detailModal').classList.add('open');
+ lockScroll();
 }
-window.closeDetail=function(){document.getElementById('detailModal').classList.remove('open')}
+window.closeDetail=function(){document.getElementById('detailModal').classList.remove('open');unlockScroll()}
 function renderAccounts(){
  const el=document.getElementById('accountsList');
  if(!data.people.length){el.innerHTML='<div class="empty">Nog geen personen.</div>';return}
@@ -381,8 +391,8 @@ function renderAccounts(){
    </div>`;
  }).join('');
 }
-window.openAdd=function(){if(!isAdmin)return;document.getElementById('modal').classList.add('open');setTimeout(()=>document.getElementById('nameInput').focus(),50)}
-window.closeModal=function(){document.getElementById('modal').classList.remove('open');document.getElementById('nameInput').value=''}
+window.openAdd=function(){if(!isAdmin)return;document.getElementById('modal').classList.add('open');lockScroll();setTimeout(()=>document.getElementById('nameInput').focus(),50)}
+window.closeModal=function(){document.getElementById('modal').classList.remove('open');document.getElementById('nameInput').value='';unlockScroll()}
 window.addPerson=async function(){if(!isAdmin)return;const n=document.getElementById('nameInput').value.trim();if(!n)return;data.people.push({id:Date.now(),name:n});await persist();closeModal();render()}
 window.askRemovePerson=function(id){
  if(!isAdmin)return;
@@ -390,8 +400,8 @@ window.askRemovePerson=function(id){
  openConfirm('Persoon verwijderen?','Weet je zeker dat je '+p.name+' wil verwijderen? Ook de bijhorende geschiedenis blijft staan, maar de openstaande rekening van deze persoon verdwijnt.',()=>removePerson(id));
 }
 async function removePerson(id){data.people=data.people.filter(p=>p.id!==id);delete selections[id];delete data.payments[id];await persist();render()}
-window.openSettings=function(){if(!isAdmin){openLogin();return}document.getElementById('carInput').value=data.settings.car;document.getElementById('consumptionInput').value=data.settings.consumption;document.getElementById('distanceInput').value=data.settings.distance;document.getElementById('priceInput').value=data.settings.price;document.getElementById('settingsModal').classList.add('open')}
-window.closeSettings=function(){document.getElementById('settingsModal').classList.remove('open')}
+window.openSettings=function(){if(!isAdmin){openLogin();return}document.getElementById('carInput').value=data.settings.car;document.getElementById('consumptionInput').value=data.settings.consumption;document.getElementById('distanceInput').value=data.settings.distance;document.getElementById('priceInput').value=data.settings.price;document.getElementById('settingsModal').classList.add('open');lockScroll()}
+window.closeSettings=function(){document.getElementById('settingsModal').classList.remove('open');unlockScroll()}
 window.saveSettings=async function(){if(!isAdmin)return;data.settings={car:document.getElementById('carInput').value||'Volvo V40 Sport',consumption:Number(document.getElementById('consumptionInput').value)||6.5,distance:Number(document.getElementById('distanceInput').value)||28.4,price:Number(document.getElementById('priceInput').value)||1.65};await persist();closeSettings();render()}
 window.showPage=function(id,btn){document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));btn.classList.add('active');render()}
 
