@@ -57,6 +57,9 @@ body::-webkit-scrollbar {display: none;}
 .setting{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:10px}.setting label{display:block;font-size:11px;color:var(--muted);margin-bottom:8px}.setting input{width:100%;background:#0b0e12;border:1px solid var(--line);color:white;padding:12px;border-radius:12px;font:inherit}
 .notice{font-size:11px;color:var(--muted);line-height:1.5;margin-top:10px}
 .errtext{color:var(--danger);font-size:12px;margin-top:8px;display:none}
+.fuel-breakdown{margin-top:14px;padding-top:12px;border-top:1px solid rgba(11,13,14,.18);}
+.fuel-person{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px;font-weight:600;}
+.fuel-person b{font-weight:800;}
 </style>
 </head>
 <body>
@@ -81,7 +84,7 @@ body::-webkit-scrollbar {display: none;}
 <div class="section-title"><h2>Wie rijdt mee?</h2><button class="link" id="addPersonBtn" onclick="openAdd()" style="display:none">+ Persoon</button></div>
 <div id="people"></div>
 <div id="empty" class="empty">Verbinden met de gedeelde gegevens...</div>
-<div class="summary"><div class="big" id="summaryText">0,00 L</div><p>brandstofkost toegewezen aan passagiers</p></div>
+<div class="summary"><div class="big" id="summaryText">0,00 L</div><p>brandstofkost toegewezen aan passagiers</p><div id="personFuelBreakdown"></div></div>
 <button class="save" id="saveTripBtn" onclick="saveTrip()" style="display:none">RIT OPSLAAN</button>
 <div class="readonly-note" id="readonlyNote" style="display:none">Log in als admin (rechtsboven) om ritten te registreren, personen te beheren en de rekening bij te werken.</div>
 </section>
@@ -272,8 +275,24 @@ function calculate(){
  return {rows,heen,terug,legFuel,driverLiters};
 }
 function updateSummary(){
- const c=calculate(); const total=c.rows.reduce((a,r)=>a+r.liters,0);
- document.getElementById('summaryText').textContent=fmt(total,2)+' L';
+  const c=calculate();
+  const total=c.rows.reduce((a,r)=>a+r.liters,0);
+  document.getElementById('summaryText').textContent=fmt(total,2)+' L';
+  const breakdown=document.getElementById('personFuelBreakdown');
+  if(!c.rows.length){
+    breakdown.innerHTML='';
+    return;
+  }
+  breakdown.innerHTML=`
+    <div class="fuel-breakdown">
+      ${c.rows.map(r=>`
+        <div class="fuel-person">
+          <span>${esc(r.name)}</span>
+          <b>${fmt(r.liters,2)} L</b>
+        </div>
+      `).join('')}
+    </div>
+  `;
 }
 window.saveTrip=async function(){
  if(!isAdmin)return;
@@ -285,20 +304,43 @@ window.saveTrip=async function(){
  await persist();selections={};render();alert('Rit opgeslagen.');
 }
 function renderHistory(){
- const el=document.getElementById('historyList');
- if(!data.trips.length){el.innerHTML='<div class="empty">Nog geen opgeslagen ritten.</div>';return}
- el.innerHTML=data.trips.map(t=>{
-   const d=new Date(t.date).toLocaleDateString('nl-BE',{day:'numeric',month:'short',year:'numeric'});
-   const liters=t.rows.reduce((a,r)=>a+r.liters,0);
-   return `<div class="history-item">
-<div class="history-top"><b>${d}</b><b>${fmt(liters)} L</b></div>
-<small>${t.rows.map(r=>esc(r.name)+' · '+label(r.selection)+' · '+fmt(r.km,1)+' km').join('<br>')}</small>
-${isAdmin?`<div class="actions" style="margin-top:11px">
-<button onclick="editTrip('${t.date}')">Aanpassen</button>
-<button onclick="askDeleteTrip('${t.date}')" style="color:var(--danger)">Hele dag verwijderen</button>
-</div>`:''}
-</div>`;
- }).join('');
+  const el=document.getElementById('historyList');
+  if(!data.trips.length){
+    el.innerHTML='<div class="empty">Nog geen opgeslagen ritten.</div>';
+    return;
+  }
+  el.innerHTML=data.trips.map(t=>{
+    const d=new Date(t.date).toLocaleDateString('nl-BE',{
+    day:'numeric',
+    month:'short',
+    year:'numeric'
+  });
+  const liters=t.rows.reduce((a,r)=>a+r.liters,0);
+
+  return `<div class="history-item">
+    <div class="history-top">
+      <b>${d}</b>
+      <b>${fmt(liters)} L</b>
+    </div>
+
+  <small>
+    ${t.rows.map(r=>
+    esc(r.name)
+      +' · '+label(r.selection)
+      +' · '+fmt(r.km,1)+' km'
+      +' · '+fmt(r.liters,2)+' L'
+    ).join('<br>')}
+  </small>
+  ${isAdmin?`
+    <div class="actions" style="margin-top:11px">
+      <button onclick="editTrip('${t.date}')">Aanpassen</button>
+      <button onclick="askDeleteTrip('${t.date}')" style="color:var(--danger)">
+      Hele dag verwijderen
+      </button>
+    </div>
+  `:''}
+  </div>`;
+  }).join('');
 }
 function renderStats(){
  const el=document.getElementById('statsList');
