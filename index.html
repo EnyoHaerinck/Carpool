@@ -13,7 +13,7 @@
 :root{--bg:#080a0d;--card:#11151a;--card2:#171c22;--text:#f5f7fa;--muted:#89919d;--accent:#b8ff3d;--line:#252b33;--danger:#ff5c68}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif}
 .app{max-width:520px;margin:auto;min-height:100vh;padding:24px 18px 105px}
-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;}
 .logo{font-weight:800;letter-spacing:-.7px;font-size:20px}.logo span{color:var(--accent)}
 .iconbtn{width:42px;height:42px;border:1px solid var(--line);background:var(--card);color:white;border-radius:14px;font-size:18px}
 .badge{font-size:10px;font-weight:800;letter-spacing:.5px;padding:6px 10px;border-radius:99px;background:var(--card2);color:var(--muted);border:0;cursor:pointer}
@@ -39,11 +39,17 @@ h1{font-size:31px;line-height:1.05;letter-spacing:-1.5px;margin:0 0 7px}.sub{col
 .bottom{position:fixed;bottom:0;left:0;right:0;background:rgba(8,10,13,.93);backdrop-filter:blur(15px);border-top:1px solid var(--line);z-index:5}.nav{max-width:520px;margin:auto;display:grid;grid-template-columns:repeat(4,1fr);padding:10px 10px calc(10px + env(safe-area-inset-bottom))}
 .nav button{border:0;background:none;color:#68717c;padding:9px;font-size:11px;font-weight:700}.nav button.active{color:var(--accent)}.nav i{display:block;font-style:normal;font-size:19px;margin-bottom:3px}
 
-/* GEFIXT: Modal gecentreerd & hogere z-index */
 body::-webkit-scrollbar {display: none;}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;align-items:center;justify-content:center;z-index:100;padding:16px}
 .modal.open{display:flex}
 .sheet{width:100%;max-width:480px;margin:auto;background:#11151a;border:1px solid var(--line);border-radius:25px;padding:22px 18px;max-height:85vh;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;-ms-overflow-style:none}.sheet::-webkit-scrollbar{width:0;height:0}.sheet h2{margin:0 0 16px;font-size:20px}.input{width:100%;padding:14px;border:1px solid var(--line);background:#0b0e12;color:white;border-radius:13px;outline:none;font:inherit}.actions{display:flex;gap:8px;margin-top:12px}.actions button{flex:1;padding:13px;border-radius:13px;border:1px solid var(--line);background:var(--card2);color:white;font-weight:700}.actions .primary{background:var(--accent);color:#090b0e;border-color:var(--accent)}.actions .danger{background:var(--danger);color:#fff;border-color:var(--danger)}
+
+/* Detail-popup (Rekening > Bekijk alle ritten): titel/totaal/sluitknop blijven vast,
+   enkel de rittenlijst zelf scrollt. De buitenste .sheet scrollt hier dus NIET meer. */
+.detail-sheet{display:flex;flex-direction:column;overflow:hidden}
+.detail-sheet #detailTitle,.detail-sheet #detailTotal,.detail-sheet .actions{flex:0 0 auto}
+.detail-sheet #detailList{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;-ms-overflow-style:none;margin:0 -4px;padding:0 4px}
+.detail-sheet #detailList::-webkit-scrollbar{width:0;height:0}
 
 .page{display:none}.page.active{display:block}
 .history-item{background:var(--card);border:1px solid var(--line);padding:15px;border-radius:17px;margin-bottom:9px}.history-top{display:flex;justify-content:space-between}.history-item small{color:var(--muted);display:block;margin-top:5px}
@@ -141,7 +147,7 @@ body::-webkit-scrollbar {display: none;}
 <div class="actions"><button onclick="closeConfirm()">Annuleren</button><button class="primary" id="confirmBtn">Bevestigen</button></div>
 </div></div>
 
-<div class="modal" id="detailModal"><div class="sheet">
+<div class="modal" id="detailModal"><div class="sheet detail-sheet">
 <h2 id="detailTitle">Ritten</h2>
 <div id="detailTotal"></div>
 <div id="detailList"></div>
