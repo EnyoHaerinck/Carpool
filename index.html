@@ -31,6 +31,7 @@ h1{font-size:31px;line-height:1.05;letter-spacing:-1.5px;margin:0 0 7px}.sub{col
 .pname{font-weight:700}.pmeta{font-size:11px;color:var(--muted);margin-top:3px}.remove{margin-left:auto;background:none;border:0;color:#626a75;font-size:16px}
 .choices{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;margin-top:13px}.choice{border:1px solid var(--line);background:#0d1014;color:#aeb5be;border-radius:11px;padding:10px 4px;font-size:11px;font-weight:700}.choice.active{background:var(--accent);border-color:var(--accent);color:#0a0c0e}.choice:disabled{opacity:.4}
 .summary{background:var(--accent);color:#0b0d0e;border-radius:22px;padding:18px;margin-top:18px}.summary .big{font-size:29px;font-weight:800;letter-spacing:-1px}.summary p{margin:4px 0 0;font-size:12px;font-weight:600;opacity:.75}
+.summary.negative{background:var(--danger);color:#1a0607}
 .save{width:100%;border:0;background:white;color:#090b0e;border-radius:17px;padding:16px;font-size:14px;font-weight:800;margin-top:12px}
 .save:disabled{opacity:.5}
 .detailbtn{width:100%;border:1px solid var(--line);background:var(--card2);color:var(--text);border-radius:14px;padding:13px;font-size:12px;font-weight:700;margin-top:10px}
@@ -54,9 +55,11 @@ body::-webkit-scrollbar {display: none;}
 .page{display:none}.page.active{display:block}
 .history-item{background:var(--card);border:1px solid var(--line);padding:15px;border-radius:17px;margin-bottom:9px}.history-top{display:flex;justify-content:space-between}.history-item small{color:var(--muted);display:block;margin-top:5px}
 .detail-row{background:#0d1014;border:1px solid var(--line);border-radius:15px;padding:13px 14px;margin-bottom:8px}
+.detail-row.payment-row{border-color:var(--accent);background:rgba(184,255,61,.06)}
 .detail-top{display:flex;justify-content:space-between;align-items:baseline}
 .detail-top b{font-size:14px}
 .detail-top .amt{font-size:16px;font-weight:800;color:var(--accent)}
+.detail-top .amt.pos{color:var(--text)}
 .detail-sub{font-size:11px;color:var(--muted);margin-top:4px}
 .detail-total{background:var(--card2);border-radius:15px;padding:14px;margin-top:4px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center}
 .detail-total b{font-size:18px}
@@ -66,6 +69,9 @@ body::-webkit-scrollbar {display: none;}
 .fuel-breakdown{margin-top:14px;padding-top:12px;border-top:1px solid rgba(11,13,14,.18);}
 .fuel-person{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px;font-weight:600;}
 .fuel-person b{font-weight:800;}
+#confirmModal{z-index:110} /* bevestiging moet boven de detail-popup liggen */
+.detail-top .right{display:flex;align-items:center}
+.delx{background:none;border:0;color:#626a75;font-size:20px;line-height:1;padding:0 0 0 12px;cursor:pointer}
 </style>
 </head>
 <body>
@@ -147,6 +153,14 @@ body::-webkit-scrollbar {display: none;}
 <div class="actions"><button onclick="closeConfirm()">Annuleren</button><button class="primary" id="confirmBtn">Bevestigen</button></div>
 </div></div>
 
+<div class="modal" id="paymentModal"><div class="sheet">
+<h2 id="paymentTitle">Betaling registreren</h2>
+<input class="input" id="paymentInput" type="number" step="0.01" min="0" inputmode="decimal" placeholder="Betaald bedrag (€)" onkeydown="if(event.key==='Enter') confirmPayment()">
+<div class="errtext" id="paymentErr">Vul een geldig bedrag in.</div>
+<div class="notice">Dit bedrag wordt afgetrokken van het openstaande saldo — ook als dat saldo daardoor negatief wordt (dan heeft deze persoon juist tegoed).</div>
+<div class="actions"><button onclick="closePayment()">Annuleren</button><button class="primary" onclick="confirmPayment()">Bevestigen</button></div>
+</div></div>
+
 <div class="modal" id="detailModal"><div class="sheet detail-sheet">
 <h2 id="detailTitle">Ritten</h2>
 <div id="detailTotal"></div>
@@ -176,13 +190,16 @@ const stateRef = doc(fdb, "carpool", "state");
 const ADMIN_KEY='v40carpool_admin';
 const ADMIN_PASSWORD='Volvo1';
 let data={
- people:[], trips:[], payments:{}, settings:{car:'Volvo V40 Sport',consumption:6.5,distance:28.4,price:1.65}
+ people:[], trips:[], payments:{}, paymentEvents:[], settings:{car:'Volvo V40 Sport',consumption:6.5,distance:28.4,price:1.65}
 };
 let selections={};
 let isAdmin=localStorage.getItem(ADMIN_KEY)==='true';
 let cloudReady=false;
+let paymentPersonId=null;
 let savedScrollY=0;
+let lockCount=0;
 function lockScroll(){
+ if(lockCount++>0)return;
  savedScrollY=window.scrollY;
  document.body.style.position='fixed';
  document.body.style.top=`-${savedScrollY}px`;
@@ -190,6 +207,7 @@ function lockScroll(){
  document.body.style.right='0';
 }
 function unlockScroll(){
+ if(lockCount===0||--lockCount>0)return;
  document.body.style.position='';
  document.body.style.top='';
  document.body.style.left='';
@@ -198,6 +216,12 @@ function unlockScroll(){
 }
 
 function fmt(n,d=2){return Number(n).toLocaleString('nl-BE',{minimumFractionDigits:d,maximumFractionDigits:d})}
+function fmtEur(n){return (n<0?'-€':'€')+fmt(Math.abs(n))}
+function round2(n){return Math.round((n+Number.EPSILON)*100)/100}
+function addPay(id,delta){
+ const v=round2((data.payments[id]||0)+delta);
+ data.payments[id]=Math.abs(v)<0.005?0:v;
+}
 function fuelForKm(km){return km*data.settings.consumption/100}
 function esc(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
 
@@ -306,7 +330,7 @@ window.saveTrip=async function(){
  const now=new Date();
  const driverCost=c.driverLiters*data.settings.price;
  data.trips.unshift({date:now.toISOString(),rows:c.rows,heen:c.heen,terug:c.terug,legFuel:c.legFuel,driverFuel:c.driverLiters,driverCost});
- c.rows.forEach(r=>{data.payments[r.id]=(data.payments[r.id]||0)+r.cost});
+ c.rows.forEach(r=>addPay(r.id,r.cost));
  await persist();selections={};render();alert('Rit opgeslagen.');
 }
 function renderHistory(){
@@ -372,57 +396,94 @@ window.askDeleteTrip=function(date){
 }
 async function deleteTrip(date){
  const t=data.trips.find(x=>x.date===date); if(!t)return;
- t.rows.forEach(r=>{data.payments[r.id]=Math.max(0,(data.payments[r.id]||0)-r.cost)});
+ t.rows.forEach(r=>addPay(r.id,-r.cost));
  data.trips=data.trips.filter(x=>x.date!==date); await persist(); render();
 }
 window.editTrip=async function(date){
  if(!isAdmin)return;
  const t=data.trips.find(x=>x.date===date); if(!t)return;
  selections={}; t.rows.forEach(r=>selections[r.id]=r.selection);
- t.rows.forEach(r=>{data.payments[r.id]=Math.max(0,(data.payments[r.id]||0)-r.cost)});
+ t.rows.forEach(r=>addPay(r.id,-r.cost));
  data.trips=data.trips.filter(x=>x.date!==date);
  await persist(); showPage('home',document.querySelector('.nav button')); render();
  alert('De rit staat opnieuw klaar om aan te passen. Sla hem daarna opnieuw op.');
 }
-window.askMarkPaid=function(id){
+window.askPayment=function(id){
  if(!isAdmin)return;
  const p=data.people.find(x=>x.id===id); if(!p)return;
- const amount=data.payments[id]||0;
- if(amount<=0)return;
- openConfirm('Rekening wissen?','Weet je zeker dat '+p.name+' €'+fmt(amount)+' betaald heeft? De openstaande rekening wordt op €0 gezet.',()=>markPaid(id));
+ paymentPersonId=id;
+ document.getElementById('paymentTitle').textContent='Betaling van '+p.name;
+ document.getElementById('paymentInput').value='';
+ document.getElementById('paymentErr').style.display='none';
+ document.getElementById('paymentModal').classList.add('open');
+ lockScroll();
+ setTimeout(()=>document.getElementById('paymentInput').focus(),50);
 }
-async function markPaid(id){
- data.payments[id]=0; await persist(); render();
+window.closePayment=function(){document.getElementById('paymentModal').classList.remove('open');unlockScroll();paymentPersonId=null}
+window.confirmPayment=async function(){
+ if(!isAdmin||paymentPersonId==null)return;
+ const val=Number(document.getElementById('paymentInput').value);
+ if(!val||val<=0){document.getElementById('paymentErr').style.display='block';return}
+ const id=paymentPersonId;
+ addPay(id,-val);
+ data.paymentEvents=data.paymentEvents||[];
+ data.paymentEvents.push({id,date:new Date().toISOString(),amount:val});
+ await persist();
+ closePayment();
+ render();
+}
+window.askDeletePayment=function(id,date){
+ if(!isAdmin)return;
+ const pe=(data.paymentEvents||[]).find(x=>x.id===id&&x.date===date); if(!pe)return;
+ openConfirm('Betaling verwijderen?','De betaling van €'+fmt(pe.amount)+' wordt verwijderd en het bedrag komt weer op de rekening te staan.',()=>deletePayment(id,date));
+}
+async function deletePayment(id,date){
+ const pe=(data.paymentEvents||[]).find(x=>x.id===id&&x.date===date); if(!pe)return;
+ addPay(id,pe.amount);
+ data.paymentEvents=data.paymentEvents.filter(x=>!(x.id===id&&x.date===date));
+ await persist();
+ render();
+ showAccountDetail(id); // lijst in de popup verversen
 }
 window.showAccountDetail=function(id){
  const p=data.people.find(x=>x.id===id); if(!p)return;
- document.getElementById('detailTitle').textContent=esc(p.name)+' · ritten';
- let rows=[];
+ document.getElementById('detailTitle').textContent=esc(p.name)+' · ritten & betalingen';
+ let entries=[];
  data.trips.forEach(t=>{
    t.rows.filter(r=>r.id===id).forEach(r=>{
-     rows.push({date:t.date, selection:r.selection, km:r.km, liters:r.liters, cost:r.cost});
+     entries.push({type:'rit', date:t.date, selection:r.selection, km:r.km, liters:r.liters, amount:r.cost});
    });
  });
+ (data.paymentEvents||[]).filter(pe=>pe.id===id).forEach(pe=>{
+   entries.push({type:'betaling', date:pe.date, amount:-pe.amount});
+ });
+ entries.sort((a,b)=>new Date(b.date)-new Date(a.date));
  const totalEl=document.getElementById('detailTotal');
  const listEl=document.getElementById('detailList');
- if(!rows.length){
+ if(!entries.length){
    totalEl.innerHTML='';
-   listEl.innerHTML='<div class="empty">Nog geen ritten voor deze persoon.</div>';
+   listEl.innerHTML='<div class="empty">Nog geen ritten of betalingen voor deze persoon.</div>';
  }else{
-   const totalCost=rows.reduce((a,r)=>a+r.cost,0);
-   const totalKm=rows.reduce((a,r)=>a+r.km,0);
-   const totalL=rows.reduce((a,r)=>a+r.liters,0);
-   totalEl.innerHTML=`<div class="detail-total"><div><div class="pmeta">Totaal over ${rows.length} rit(ten)</div><b>€${fmt(totalCost)}</b></div><div style="text-align:right"><div class="pmeta">${fmt(totalKm,1)} km</div><div class="pmeta">${fmt(totalL)} L</div></div></div>`;
-   listEl.innerHTML=rows.map(r=>{
-     const d=new Date(r.date).toLocaleDateString('nl-BE',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+   const net=entries.reduce((a,e)=>a+e.amount,0);
+   const rideCount=entries.filter(e=>e.type==='rit').length;
+   const payCount=entries.filter(e=>e.type==='betaling').length;
+   totalEl.innerHTML=`<div class="detail-total"><div><div class="pmeta">${rideCount} rit(ten) · ${payCount} betaling(en)</div><b style="color:${net<=0?'var(--accent)':'var(--danger)'}">${fmtEur(net)}</b></div></div>`;
+   listEl.innerHTML=entries.map(e=>{
+     const d=new Date(e.date).toLocaleDateString('nl-BE',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+     if(e.type==='betaling'){
+        return `<div class="detail-row payment-row">
+          <div class="detail-top"><b>${d}</b><span class="right"><span class="amt">${fmtEur(e.amount)}</span>${isAdmin?`<button class="delx" onclick="askDeletePayment(${id},'${e.date}')">×</button>`:''}</span></div>
+          <div class="detail-sub">💶 Betaling ontvangen</div>
+        </div>`;
+      }
      return `<div class="detail-row">
-       <div class="detail-top"><b>${d}</b><span class="amt">€${fmt(r.cost)}</span></div>
-       <div class="detail-sub">${label(r.selection)} · ${fmt(r.km,1)} km · ${fmt(r.liters)} L</div>
+       <div class="detail-top"><b>${d}</b><span class="amt pos">${fmtEur(e.amount)}</span></div>
+       <div class="detail-sub">${label(e.selection)} · ${fmt(e.km,1)} km · ${fmt(e.liters)} L</div>
      </div>`;
    }).join('');
  }
- document.getElementById('detailModal').classList.add('open');
- lockScroll();
+  const dm=document.getElementById('detailModal');
+  if(!dm.classList.contains('open')){dm.classList.add('open');lockScroll();}
 }
 window.closeDetail=function(){document.getElementById('detailModal').classList.remove('open');unlockScroll()}
 function renderAccounts(){
@@ -433,9 +494,9 @@ function renderAccounts(){
    const count=data.trips.reduce((n,t)=>n+t.rows.filter(r=>r.id===p.id).length,0);
    return `<div class="person">
     <div class="phead"><div class="avatar">${p.name[0].toUpperCase()}</div><div><div class="pname">${esc(p.name)}</div><div class="pmeta">${count} ritten op rekening</div></div></div>
-    <div class="summary" style="margin-top:13px"><div class="big">€${fmt(amount)}</div><p>${amount>0?'Openstaand bedrag':'Alles betaald'}</p></div>
+    <div class="summary ${amount<0?'negative':''}" style="margin-top:13px"><div class="big">${fmtEur(amount)}</div><p>${amount>0?'Openstaand bedrag':(amount<0?'Heeft tegoed':'Alles betaald')}</p></div>
     <button class="detailbtn" onclick="showAccountDetail(${p.id})">📋 Bekijk alle ritten</button>
-    ${amount>0&&isAdmin?`<button class="save" onclick="askMarkPaid(${p.id})">✓ BETAALD · REKENING WISSEN</button>`:''}
+    ${isAdmin?`<button class="save" onclick="askPayment(${p.id})">💶 Betaling registreren</button>`:''}
    </div>`;
  }).join('');
 }
@@ -447,7 +508,13 @@ window.askRemovePerson=function(id){
  const p=data.people.find(x=>x.id===id); if(!p)return;
  openConfirm('Persoon verwijderen?','Weet je zeker dat je '+p.name+' wil verwijderen? Ook de bijhorende geschiedenis blijft staan, maar de openstaande rekening van deze persoon verdwijnt.',()=>removePerson(id));
 }
-async function removePerson(id){data.people=data.people.filter(p=>p.id!==id);delete selections[id];delete data.payments[id];await persist();render()}
+async function removePerson(id){
+ data.people=data.people.filter(p=>p.id!==id);
+ delete selections[id];
+ delete data.payments[id];
+ data.paymentEvents=(data.paymentEvents||[]).filter(pe=>pe.id!==id);
+ await persist();render();
+}
 window.openSettings=function(){if(!isAdmin){openLogin();return}document.getElementById('carInput').value=data.settings.car;document.getElementById('consumptionInput').value=data.settings.consumption;document.getElementById('distanceInput').value=data.settings.distance;document.getElementById('priceInput').value=data.settings.price;document.getElementById('settingsModal').classList.add('open');lockScroll()}
 window.closeSettings=function(){document.getElementById('settingsModal').classList.remove('open');unlockScroll()}
 window.saveSettings=async function(){if(!isAdmin)return;data.settings={car:document.getElementById('carInput').value||'Volvo V40 Sport',consumption:Number(document.getElementById('consumptionInput').value)||6.5,distance:Number(document.getElementById('distanceInput').value)||28.4,price:Number(document.getElementById('priceInput').value)||1.65};await persist();closeSettings();render()}
@@ -463,10 +530,11 @@ onSnapshot(stateRef, async snap => {
      people:d.people||[],
      trips:d.trips||[],
      payments:d.payments||{},
+     paymentEvents:d.paymentEvents||[],
      settings:d.settings||{car:'Volvo V40 Sport',consumption:6.5,distance:28.4,price:1.65}
    };
  }else if(isAdmin){
-   data={people:[{id:1,name:'Jens'},{id:2,name:'Milan'},{id:3,name:'Thomas'}],trips:[],payments:{},settings:data.settings};
+   data={people:[{id:1,name:'Jens'},{id:2,name:'Milan'},{id:3,name:'Thomas'}],trips:[],payments:{},paymentEvents:[],settings:data.settings};
    await persist();
  }
  cloudReady=true;
